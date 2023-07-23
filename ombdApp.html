@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <!-- Aditya R. Chakole -->
+        <title>OMDB App</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@300;500;700&family=Roboto:wght@100;300;500;700;900&family=Ubuntu:ital,wght@0,300;0,400;0,700;1,500&display=swap" rel="stylesheet">
+    
+        <script>
+            // Declaring Global varibles
+            let baseURL = `http://www.omdbapi.com/?apikey=d0fcd53b`;
+            let startMovies = ["iron man", "harry potter", "transformers"];
+            let seacrhBy = startMovies[(Math.random() * startMovies.length) | 0];
+            let pageNo = 1;
+            let paginationSize = 15;
+            let totalPages = 0;
+            let allMovies = [];
+            let movieComment = "";
+            let movieRating = "";
+
+            // Helper function for searchbox, pagenom, commentbox, ratingbox related input features
+            function inputHelper(identifier){
+                if(identifier == 'searchBox') seacrhBy = document.getElementById(identifier).value;
+                if(identifier == 'pageNo'){
+                    pageNo = document.getElementById(identifier).value;
+                    if(pageNo<=1) pageNo = 1;
+                    if(pageNo>totalPages) pageNo = totalPages;
+                    render();
+                }
+                if(identifier == 'commentBox') movieComment = document.getElementById(identifier).value;
+                if(identifier == 'ratingBox')  movieRating = document.getElementById(identifier).value;
+                console.log(">>>> ", movieComment, movieRating);
+            }
+
+            //Function to fetch data using api for searching 
+            function searchMovie(){
+                fetchData("search", seacrhBy);
+            }
+
+            // Function to save comment and rating in local storage
+            function saveComment(identifier){
+                if(movieComment != "") localStorage.setItem('comment-'+String(identifier), movieComment);  
+                if(movieRating != "") {
+                    if(movieRating < 1) localStorage.setItem('rating-'+String(identifier), 1);
+                    else if(movieRating > 5) localStorage.setItem('rating-'+String(identifier), 5);
+                    else localStorage.setItem('rating-'+String(identifier), movieRating);
+                }  
+                fetchData("movie", identifier);
+            }
+
+            // Function to edit comment, and rating which stored in local storage
+            function editComment({identifier, feature}){ 
+                if(feature == 'comment'){
+                    let helper = String(localStorage.getItem('comment-'+String(identifier)));
+                    localStorage.removeItem('comment-'+String(identifier)); 
+                    fetchData("movie", identifier, helper);
+                }
+                else{
+                    let helper = String(localStorage.getItem('rating-'+String(identifier)));
+                    localStorage.removeItem('rating-'+String(identifier)); 
+                    fetchData("movie", identifier, helper);
+                }
+            }
+
+            // Function to pagiante all movies list as per pageSize, and current pageNumber
+            function paginate(array, pageSize, pageNumber) {
+                return array.slice((pageNumber - 1) * pageSize, pageNumber * pageSize);
+            }
+
+            // Function to Open Modal, and fetch data related to selected movie
+            function movieDetails({status, identifier}){
+                console.log(status, identifier);
+
+                let modal = document.getElementById("modal");
+                if(status) modal.style.display = "block";
+                else modal.style.display = "none";
+
+                fetchData("movie", identifier);
+            }
+
+            // Render function, 
+            function render(){
+                let moviesOnThisPage = paginate(allMovies, paginationSize, pageNo);
+
+                let appBottomPageNoDiv = document.getElementById('pagination');
+                appBottomPageNoDiv.innerHTML = `
+                    <input type="text" class="pageNo" id="pageNo" 
+                        placeholder="Add Page No " value=${pageNo} oninput="inputHelper('pageNo')">
+                `;
+                
+                let appBottomContainerDiv = document.getElementById('bottomContainer');
+                appBottomContainerDiv.innerHTML = "";
+                for(let i=0; i<moviesOnThisPage.length; i++){
+                    appBottomContainerDiv.innerHTML += `
+                        <div id=${moviesOnThisPage[i].imdbID} class="movieCard" onclick=movieDetails(${JSON.stringify({"status": 1, "identifier": moviesOnThisPage[i].imdbID})})>
+                            <img class="poster" src=${moviesOnThisPage[i].Poster} alt="movie poster" height="25px">
+                            <p class="title">${moviesOnThisPage[i].Title}</p>
+                            <span>
+                                <p class="year">${moviesOnThisPage[i].Year}</p>
+                                <p class="type">${moviesOnThisPage[i].Type}</p>
+                            </span>
+                            <br>
+                        </div>
+                    `;
+                }
+            }
+
+            // Fetch function, also renders movieList, and modal once the data is fetched
+            async function fetchData(feature, parameter, helper){    
+                console.log("ujbnfukladbnvilndb  >>>  ", helper);
+                if(feature == "search"){
+                    let allFetchedMovies = []
+                    let currentPage = 1;
+                    let condition = 1;
+
+                    while(1){
+                        const response = await fetch(`http://www.omdbapi.com/?apikey=d0fcd53b&${(feature=="search")?('s='):('i=')}${parameter}&page=${currentPage}`);
+                        let { Search, totalResults } = await response.json();
+                        allFetchedMovies.push(...Search);
+                        currentPage++;
+                        // condition = (currentPage<((totalResults/10) + 1));
+                        if((currentPage-1)*10 >= totalResults) break;
+                    }
+                    allMovies = allFetchedMovies;
+                    totalPages = Math.floor(allMovies.length/paginationSize) + ((allMovies.length%paginationSize)!=0);
+                    render();
+                    return ;
+                }
+                else{
+                    let isCommentPresentInLocalStorage = (localStorage.getItem('comment-'+String(parameter)) != null);
+                    let isRatingPresentInLocalStorage  = (localStorage.getItem('rating-'+String(parameter)) != null);
+                    fetch(`http://www.omdbapi.com/?apikey=d0fcd53b&i=${parameter}`)
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not OK');
+                        }
+                        return response.json();
+                    })
+                    .then((data) => {
+                        console.log("<><>", data);
+                        let modalContent = document.getElementById("modalContent");
+                        modalContent.innerHTML = `
+                            <span class="top" id="modalContentTop">
+                                <p>${data.Title}</p>
+                                <button class="close" onclick=onclick=movieDetails(${JSON.stringify({"status": 0, "identifier": -1})})>X</button>
+                            </span>
+
+                            <span id="modalContentBottom" class="bottom">
+                                <div class="left">
+                                    <img class="poster" src=${data.Poster} alt="movie poster"> 
+                                </div>
+                                <div class="right">
+                                    <div class="stats">
+                                        <div class="upper"> <p>IMDB Rating - ${data.imdbRating}</p> <p>${data.Rated}</p> <p>${data.Type}</p> </div>
+                                        <div class="lower"> <p>Runtime - ${data.Runtime}</p> <p>Released Date - ${data.Released}</p> <p>Released Country - ${data.Country}</p> </div>
+                                    </div>
+                                    <div class="genre"><p class="topic">Genre</p> <p class="info">- ${data.Genre}</p></div>
+                                    <div class="plot"><p class="topic">Plot</p> <p class="info">- ${data.Plot}</p></div>
+                                    <div class="actors"><p class="topic">Actors</p> <p class="info">- ${data.Actors}</p></div>
+                                    <div class="writer"><p class="topic">Writer</p> <p class="info">- ${data.Writer}</p></div>
+
+                                    <div class="additionalInfo">
+                                        <input type="text" class="commentBox ${(isCommentPresentInLocalStorage)?('hidden'):('')}" id="commentBox" 
+                                            value="${(helper)?(helper):('')}" placeholder="Search for a movie here ..." oninput="inputHelper('commentBox')">
+                                        <button for="commentBox" class="saveCommentButton ${(isCommentPresentInLocalStorage)?('hidden'):('')}" id="saveCommentButton" onclick=saveComment("${data.imdbID}")>Save Comment</button>
+
+                                        <p id="comment-${data.imdbID}" class="comment  ${(!isCommentPresentInLocalStorage)?('hidden'):('')}">Comment - ${localStorage.getItem('comment-'+String(data.imdbID))}</p>
+                                        <button for="commentBox" class="editCommentButton ${(!isCommentPresentInLocalStorage)?('hidden'):('')}" id="editCommentButton" onclick=editComment(${JSON.stringify({"identifier": data.imdbID, "feature": "comment"})})>Edit Comment</button>
+                                    </div>
+                                    
+                                    <div class="additionalInfo">
+                                        <input type="number" min="1" max="5" class="ratingBox ${(isRatingPresentInLocalStorage)?('hidden'):('')}" id="ratingBox" 
+                                            value="${(helper)?(helper):('')}" placeholder="Search for a movie here ..." oninput="inputHelper('ratingBox')">
+                                        <button for="ratingBox" class="saveRatingButton ${(isRatingPresentInLocalStorage)?('hidden'):('')}" id="saveRatingButton" onclick=saveComment("${data.imdbID}")>Save Rating</button>
+
+                                        <p id="comment-${data.imdbID}" class="comment  ${(!isRatingPresentInLocalStorage)?('hidden'):('')}">Rating - ${localStorage.getItem('rating-'+String(data.imdbID))}</p>
+                                        <button for="ratingBox" class="editRatingButton ${(!isRatingPresentInLocalStorage)?('hidden'):('')}" id="editRatingButton" onclick=editComment(${JSON.stringify({"identifier": data.imdbID, "feature": "rating"})})>Edit Rating</button>
+                                    </div>
+                                </div>
+                            </span>
+                        `;
+                    })
+                    .catch(error => {
+                        console.log('Error:', error.message);
+                    });
+                }        
+            }
+
+            // Function to show movies list at the start
+            window.onload = function() {
+                let searchBox = document.getElementById("searchBox");
+                searchBox.value = seacrhBy;
+
+                fetchData("search", seacrhBy);
+            }
+        </script>
+        <style>
+            *{
+                margin: 0;
+                padding: 0;
+                font-family: 'Ubuntu', sans-serif;
+            }
+            input:hover, button:hover{
+                cursor: pointer;
+            }
+            body{
+                display: grid;
+                background-color: #24243c;
+            }
+
+            .app{
+                width: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+            .app .top .title{
+                font-size: 40px;
+                font-weight: 700;
+                color: #7ec8e3;
+                margin: 16px 0;
+            }
+            .app .mid{
+                display: flex;
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+            .app .mid input{
+                width: 250px;
+                font-size: 20px;
+                font-weight: 500;
+                border: 0;
+                border-radius: 1px;
+                padding: 5px 10px;
+                background-color: #0a0a14;
+                color: #7ec8e3;
+                margin: 0 0 10px 10px;
+            }
+            .app .mid button{
+                width: 100px;
+                font-size: 20px;
+                font-weight: 500;
+                border: 0;
+                border-radius: 1px;
+                padding: 5px 10px;
+                background-color: #0a0a14;
+                color: #7ec8e3;
+                margin: 0 0 10px 10px;
+            }
+            .app .bottom{
+                display: flex;
+                flex-direction: column;
+            }
+            .app .bottom .pagination{
+                display: flex;
+                justify-content: center;
+            }
+            .app .bottom .pagination input{
+                text-align: center;
+                width: 50px;
+                font-size: 20px;
+                font-weight: 500;
+                border: 0;
+                border-radius: 1px;
+                padding: 5px 10px;
+                background-color: #0a0a14;
+                color: #7ec8e3;
+                margin: 0 0 10px 10px;
+            }
+            .app .bottom .container{
+                display: flex;
+                flex: 1;
+                flex-wrap: wrap;
+                justify-content: space-around;
+                column-gap: 40px;
+                row-gap: 40px;
+
+                max-width: 1350px;
+                margin: 25px auto;
+            }
+            .app .bottom .container .movieCard{
+                width: 225px;
+                background-color: #0a0a14;
+                color: #FAF9F6;
+                box-shadow: 0 2px 12px rgba(255, 255, 255, .20);
+                border-radius: 2.5px;
+                padding: 10px 5px;
+
+                display: flex;
+                flex-direction: column;
+                justify-content: space-evenly;
+                align-items: center;
+            }
+            .app .bottom .container .movieCard .poster{
+                margin: 10px 0 0 0;
+                width: 185px;
+                height: 185px;
+                border-radius: 2.5px;
+            }
+            .app .bottom .container .movieCard .title{
+                font-size: 17.5px;
+                font-weight: 700;
+
+                text-align: center;
+            }
+            .app .bottom .container .movieCard span{
+                display: flex;
+                font-size: 10px;
+                column-gap: 10px;
+                font-size: 15px;
+            }
+            .app .bottom .container .movieCard span .year{
+                border-radius: 2.5px;
+                padding: 2.5px;
+                background-color: #7ec8e3;
+                color: #24243c;
+            }
+            .app .bottom .container .movieCard span .type{
+                border-radius: 2.5px;
+                padding: 2.5px;
+                background-color: #24243c;
+                color: #7ec8e3;
+            }
+
+            .modal {
+                display: none; 
+                position: fixed; 
+                z-index: 1; 
+                padding-top: 100px;
+                left: 0;
+                top: 0;
+                width: 100%; 
+                height: 100%; 
+                overflow: auto; 
+                background-color: rgb(0,0,0); 
+                background-color: rgba(0,0,0,0.4);
+                color: #FAF9F6;
+            }
+            .modalContent {
+                background-color: #24243c;
+                margin: auto;
+                padding: 20px 20px 35px 20px;
+                border: 1px solid #888;
+                border-radius: 5px;
+                width: 80%;
+            }
+            .modalContent .top{
+                display: flex;
+                justify-content: space-between;
+                font-size: 35px;
+                font-weight: 700;
+                margin-bottom: 25px;
+            }
+            .modalContent .top p{
+                flex: 1;
+                display: flex;
+                justify-content: center;
+            }
+            .modalContent .top .close{
+                background-color: #0a0a14;
+                color: white;
+
+                padding: 5px 10px;
+                border: 0;
+                border-radius: 2.5px;
+            }
+
+            .modalContent .bottom{
+                display: flex;
+                flex-direction: row;
+            }
+            .modalContent .bottom .left{
+                flex: 1;
+                display: flex;
+                justify-content: center;
+            } 
+            .modalContent .bottom .right{
+                flex: 2;
+
+                display: flex;
+                flex-direction: column;
+                justify-content: space-around;
+            } 
+            .modalContent .bottom .left img{
+                width: 67%;
+                height: 100%;
+                border-radius: 2.5px;
+                box-shadow: 0 2px 12px rgba(255, 255, 255, .65);
+            }
+            .modalContent .bottom .right .stats{
+                display: flex;
+                flex-direction: column;
+                row-gap: 16px;
+                margin-bottom: 16px;
+            }
+            .modalContent .bottom .right .stats .upper, .modalContent .bottom .right .stats .lower{
+                display: flex;
+                justify-content: start;
+                column-gap: 15px;
+
+                font-size: 15px;
+                font-weight: 700;
+                text-align: center;
+            }
+            .modalContent .bottom .right .stats .upper p, .modalContent .bottom .right .stats .lower p{
+                display: flex;
+                align-items: center;
+                justify-content: center;
+
+                width: 30%;
+                height: 50px;
+                background-color: #0a0a14;
+                border-radius: 5px;
+            }
+            .modalContent .bottom .right div{
+                display: flex;
+                margin-bottom: 5px;
+            }
+
+            .modalContent .bottom .right .genre .topic,
+            .modalContent .bottom .right .plot .topic,
+            .modalContent .bottom .right .actors .topic,
+            .modalContent .bottom .right .writer .topic{
+                font-size: 20px;
+                font-weight: 500;
+                width: 75px;
+            }
+
+            .modalContent .bottom .right .genre .info,
+            .modalContent .bottom .right .plot .info,
+            .modalContent .bottom .right .actors .info,
+            .modalContent .bottom .right .writer .info{
+                font-size: 15px;
+                font-weight: 500;
+                flex: 1;
+            }
+            .modalContent .bottom .right .additionalInfo{
+                display: flex;
+                column-gap: 15px;
+
+                font-size: 20px;
+                font-weight: 500;
+            }
+
+            .modalContent .bottom .right .additionalInfo input,
+            .modalContent .bottom .right .additionalInfo button{
+                background-color: #0a0a14;
+                color: white;
+
+                padding: 5px 10px;
+                border: 0;
+                border-radius: 2.5px;
+            }
+
+            .hidden{
+                display: none;
+            }
+
+            @media(max-width: 750px){
+                .app .bottom .pagination, .app .bottom .container{
+                    width: 100%;
+                }
+
+                .modalContent .bottom{
+                    flex-direction: column;
+                    row-gap: 25px;
+                }
+                .modalContent .bottom .right .stats .upper p, .modalContent .bottom .right .stats .lower p{
+                    font-size: 10px;
+                    font-weight: 500;
+                }
+                .modalContent .bottom .right .genre .topic,
+                .modalContent .bottom .right .plot .topic,
+                .modalContent .bottom .right .actors .topic,
+                .modalContent .bottom .right .writer .topic{
+                    font-size: 17.5px;
+                    font-weight: 500;
+                    width: 75px;
+                }
+                .modalContent .bottom .right .genre .info,
+                .modalContent .bottom .right .plot .info,
+                .modalContent .bottom .right .actors .info,
+                .modalContent .bottom .right .writer .info{
+                    font-size: 15px;
+                    font-weight: 500;
+                    flex: 1;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="app">
+            <div class="top" id="top">
+                <p class="title">OMDB App</p>
+            </div>
+            <div class="mid" id="mid">
+                <input type="text" class="searchBox" id="searchBox" 
+                    placeholder="Search for a movie here ..." oninput="inputHelper('searchBox')">
+                <button for="searchBox" class="searchButton" id="searchButton" onclick="searchMovie()">Search</button>
+            </div>
+            <div class="bottom" id="bottom">
+                <div class="pagination" id="pagination"></div>
+                <div class="container" id="bottomContainer"></div>
+            </div>
+
+            <div class="modal" id="modal">
+                <div class="modalContent" id="modalContent">
+                    <span class="top" id="modalContentTop"></span>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
